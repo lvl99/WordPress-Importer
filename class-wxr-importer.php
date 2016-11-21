@@ -1026,9 +1026,15 @@ class WXR_Importer extends WP_Importer {
 			$remote_url = rtrim( $this->base_url, '/' ) . $remote_url;
 		}
 
-		$upload = $this->fetch_remote_file( $remote_url, $post );
-		if ( is_wp_error( $upload ) ) {
-			return $upload;
+		// Check if the remote file already exists locally
+		$upload = $this->check_remote_file_exists_locally( $remote_url );
+
+		// If doesn't exist, then get the remote file
+		if ( !$upload ) {
+			$upload = $this->fetch_remote_file( $remote_url, $post );
+			if ( is_wp_error( $upload ) ) {
+				return $upload;
+			}
 		}
 
 		$info = wp_check_filetype( $upload['file'] );
@@ -1721,6 +1727,44 @@ class WXR_Importer extends WP_Importer {
 		 * @param array $data Raw data imported for the term.
 		 */
 		do_action( 'wxr_importer.processed.term', $term_id, $data );
+	}
+
+	/**
+	 * Check if file is located on the server already
+	 *
+	 * @param string $remote_url URL of item to fetch
+	 * @return array|null Local file location details on success, otherwise null
+	 */
+	protected function check_remote_file_exists_locally ( $remote_url ) {
+		$wp_upload_dir = wp_upload_dir();
+
+		$_pathinfo = pathinfo($remote_url);
+		$_uploaddir = trailingslashit($wp_upload_dir['basedir']);
+		$_uploadurl = trailingslashit($wp_upload_dir['baseurl']);
+
+		// Matches to year-month folder (only if it is enabled on the local site)
+		if (get_option('uploads_use_yearmonth_folders')) {
+			preg_match("/\/(\d{4})\/(\d{2})\/(.*)$/", $remote_url, $_pathmatches);
+			if (count($_pathmatches) == 4) {
+				$_uploaddir .= trailingslashit($_pathmatches[1]) . trailingslashit($_pathmatches[2]);
+				$_uploadurl .= trailingslashit($_pathmatches[1]) . trailingslashit($_pathmatches[2]);
+			}
+		}
+
+		$_filename = $_pathinfo['basename'];
+		$_filepath = $_uploaddir . $_filename;
+		$_fileurl = $_uploadurl . $_filename;
+
+		if ( ! file_exists($_filepath) ) {
+			return null;
+		} else {
+			return array(
+				'file' => $_filepath,
+				'url' => $_fileurl,
+				'filesize' => filesize($_filepath),
+				'error' => false,
+			);
+		}
 	}
 
 	/**
