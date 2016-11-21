@@ -1029,8 +1029,15 @@ class WXR_Importer extends WP_Importer {
 		// Check if the remote file already exists locally
 		$upload = $this->check_remote_file_exists_locally( $remote_url );
 
+		// Check if the attachment is already registered as a post in the media library
+		if ( $upload ) {
+			$test_attachment_id = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE guid='%s';", $upload['url'] ) );
+			if ( $test_attachment_id && count($test_attachment_id) > 0 ) {
+				return $test_attachment_id[0];
+			}
+
 		// If doesn't exist, then get the remote file
-		if ( !$upload ) {
+		} else {
 			$upload = $this->fetch_remote_file( $remote_url, $post );
 			if ( is_wp_error( $upload ) ) {
 				return $upload;
